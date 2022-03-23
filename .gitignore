@@ -17,7 +17,6 @@ outputs/
 /buildLin
 Python/buildMac
 *.meta
-Python/builts
-
+Python/builts/
 
 

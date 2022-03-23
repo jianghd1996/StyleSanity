@@ -4,7 +4,7 @@ import numpy as np
 from mlagents_envs.environment import ActionTuple, UnityEnvironment
 import torch
 from torch import nn
-from src.models.modules.modelUtils import versionControl
+from src.models.modules.modelUtils import versionControl as vc
 import src.utils.utils as utils
 
 from src.models.memory import Experience, ReplayBuffer
@@ -86,7 +86,8 @@ class Agent:
     def get_obs(self):
         """Get observations, reward and done."""
         decision_steps, terminal_steps = self.env.get_steps(self.behavior_name)
-
+        
+        # new_state is list[ndarray]: [(1x132), 720x480x3, 720x480x3]
         for t_idx in terminal_steps.agent_id:
             t_step = terminal_steps[t_idx]
             new_state, reward, agentID = t_step.obs, t_step.reward, t_step.agent_id
@@ -146,8 +147,9 @@ class Agent:
             if device not in ["cpu"]:
                 state = state.cuda(device)
             
-            obs, cam = versionControl.current_interpreter(state)
+            obs, cam = vc.current_interpreter(state)
             q_values = net(obs, cam)
+            
             _, action = torch.max(q_values, dim=1)
             action = int(action.item())
 

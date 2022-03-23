@@ -10,14 +10,13 @@ def main(config: DictConfig):
     from src.infer import infer
     from src.train import train
     from src.utils import utils
-    from src.models.modules.modelUtils import versionControl
+    from src.models.modules.modelUtils import versionControl as vc
   
     if config.get("print_config"):
         utils.print_config(config, resolve=True)
 
     # setting version 
-    
-    versionControl.set_version_str(config.versionCam,
+    vc.set_version_str(config.versionCam,
                                    config.versionObs)
     
     if config.run_type == "train":
@@ -28,6 +27,4 @@ def main(config: DictConfig):
 
 
 if __name__ == "__main__":
-    # test()
-    #
     main()

@@ -14,7 +14,7 @@ from src.models.modules.DQN import Discriminator
 from src.models.memory import ReplayBuffer, RLDataset
 from src.models.agent import Agent
 import src.utils.utils as utils
-from src.models.modules.modelUtils import versionControl
+from src.models.modules.modelUtils import versionControl as vc
 import time
 import math
 import numpy as np
@@ -71,9 +71,9 @@ class DQNModule(LightningModule):
         self.env = env
 
         self.net = \
-          versionControl.current_model(n_actions)
+          vc.current_model(n_actions)
         self.target_net = \
-          versionControl.current_model(n_actions)
+          vc.current_model(n_actions)
 
         self.D = Discriminator(4)
 
@@ -149,8 +149,8 @@ class DQNModule(LightningModule):
         :return: loss and batch averaged Q-value.
         """
         states, actions, rewards, dones, next_states = batch
-        obs, cam = versionControl.current_interpreter(states)
-
+        obs, cam = vc.current_interpreter(states)
+        
         state_action_values = (
             self.net(obs, cam)
             .gather(1, actions.unsqueeze(-1))
@@ -158,7 +158,7 @@ class DQNModule(LightningModule):
         )
 
         with torch.no_grad():
-            next_obs, next_cam = versionControl.current_interpreter(next_states)
+            next_obs, next_cam = vc.current_interpreter(next_states)
             next_state_values  = self.target_net(next_obs, next_cam).max(1)[0]
             
             next_state_values[dones] = 0.0
@@ -178,14 +178,17 @@ class DQNModule(LightningModule):
         states, actions, rewards, dones, next_states = batch
         r_states, r_actions, r_rewards, r_dones, r_next_states = r_batch
 
-        obs, cam = versionControl.current_interpreter(states)
-        next_obs, next_cam = versionControl.current_interpreter(next_states)
+        # state = list [(bs x 1 x 132), (bs x 720 x 480 x 3), (bs x 720 x 480 x 3)]
+        obs, cam = vc.current_interpreter(states)
+        next_obs, next_cam = vc.current_interpreter(next_states)
 
-        obs, r_cam = versionControl.current_interpreter(r_states)
-        next_obs, r_next_cam = versionControl.current_interpreter(r_next_states)
+        obs, r_cam = vc.current_interpreter(r_states)
+        next_obs, r_next_cam = vc.current_interpreter(r_next_states)
 
         device = self.get_device(batch)
-
+        
+        # [TODO]: OF -> D
+        # batch size
         valid = torch.ones(len(r_states[0]), 1).to(device)
         fake = torch.zeros(len(states[0]), 1).to(device)
 

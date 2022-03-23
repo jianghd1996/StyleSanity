@@ -47,6 +47,7 @@ class StateInterpreter:
       _obs  = state[0][:, 7: ]      # occupancy grid
       
       obs_3d = utils.reshape_occupancy_grid(_obs.cpu().numpy(),dims.cpu().numpy()[0].astype(int))
+    
       
       return obs_3d, cam
     
@@ -69,10 +70,15 @@ class StateInterpreter:
     def CamOFRGB_ObsSDF(mVersion, state):
       """ State interpreter: CamOF_ObsSDF
       """
+      # first observation sensor
       cam   = state[0][:,  :4]      # distance + local_point 3 dim
       dims  = state[0][:, 4:7]      # dimension of occupancy grid R^3
       _obs  = state[0][:, 7: ]      # occupancy grid
+      
+      # second obs sensor
       opticFlow = state[1][:]          # 720 x 480 x 3 
+      
+      # third obs sensor
       imgRGB    = state[2][:]          # 720 x 480 x 3 
 
       obs_3d = utils.reshape_occupancy_grid(_obs.cpu().numpy(),dims.cpu().numpy()[0].astype(int))
