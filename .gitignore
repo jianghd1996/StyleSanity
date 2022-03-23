@@ -7,7 +7,7 @@ Temp/
 UserSettings/
 sanity-env*
 memory.npy
-*/Resources
+# !*/Resources
 */ML-Agents
 */ML-Agents.meta
 */Resources.meta
