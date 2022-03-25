@@ -101,13 +101,41 @@ class Discriminator(nn.Module):
     def __init__(self, n_states : int):
         super(Discriminator, self).__init__()
 
-        self.model = nn.Sequential(
-            nn.Linear(2 * n_states, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 1),
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels=6, out_channels=8, kernel_size=7, stride=2),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(in_channels=8, out_channels=16, kernel_size=7, stride=2),
+            nn.MaxPool2d(kernel_size=3, stride=2),
         )
 
     def forward(self, x, n_x):
-        return self.model(torch.cat([x, n_x], dim=1))
+        x = self.conv(torch.cat([x.transpose(1, 3), n_x.transpose(1, 3)], dim=1))
+        print(x.shape)
+
+        return x
+
+class OptClass(nn.Module):
+
+    def __init__(self, action_space):
+        super(OptClass, self).__init__()
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=8, kernel_size=7, stride=2),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(in_channels=8, out_channels=16, kernel_size=7, stride=2),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=7, stride=2),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        )
+        self.fc = nn.Sequential(
+            nn.Linear(160*8, 64),
+            nn.ReLU(),
+            nn.Linear(64, action_space),
+        )
+
+    def forward(self, x):
+        batch_size = len(x)
+        x = self.conv(x.transpose(1, 3))
+        x = x.view(batch_size, -1)
+
+        return self.fc(x)

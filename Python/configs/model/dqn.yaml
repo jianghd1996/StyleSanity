@@ -5,7 +5,7 @@ learning_rate: 1e-3
 weight_decay: 1e-5
 
 sync_rate: 100  # Number of turns to copy weight from `eval_net` to target network -> Q_iteration
-replay_size: 10
+replay_size: 200
 lr_reduce_rate: 0.999  # Learning rate reduction rate
 eps_last_frame: 200
 eps_start: 0.1
