@@ -46,7 +46,7 @@ public class navigate_3D : Agent
     public float timeScaleValue=1.0f;
 
     public Transform[] vTarget;
-    private int index, action;
+    private int index, action, Action;
 
     public static Vector3 direction, target;
 
@@ -142,19 +142,84 @@ public class navigate_3D : Agent
     public override async void CollectObservations(VectorSensor sensor)
     {
         Vector3 local_point = this.transform.InverseTransformPoint(target).normalized;
-        sensor.AddObservation(distance);
+        // sensor.AddObservation(distance);
         sensor.AddObservation(local_point[0]);
         sensor.AddObservation(local_point[1]);
         sensor.AddObservation(local_point[2]);
-        // sensor.AddObservation(occupancy_map);
+        sensor.AddObservation(occupancy_map);
 
-        var vox = GameObject.Find("OccupancyGrid").GetComponent<Voxelizer>();
-        float[] outArray = vox.outArray;
-        Vector3 outDim = vox.outDim;
-        sensor.AddObservation(outDim);
-        sensor.AddObservation(outArray);
+        // var vox = GameObject.Find("OccupancyGrid").GetComponent<Voxelizer>();
+        // float[] outArray = vox.outArray;
+        // Vector3 outDim = vox.outDim;
+        // sensor.AddObservation(outDim);
+        // sensor.AddObservation(outArray);
     }
 
+    public override async void OnActionReceived(ActionBuffers actionBuffers)
+    {
+        recordedStep+=1;
+
+        // Update camera angle according to the received action
+        // Discrete agent
+        action = actionBuffers.DiscreteActions[0];
+        rewardCollision = 0;
+
+        float lst_dist = distance, height = 0;
+
+        if (action == 5)
+            action = Action;
+
+        action = Random.Range(0, 5);
+        if (action == 0)
+            theta -= deltaSpeed;
+        else if (action == 1)
+            theta += 0;
+        else if (action == 2)
+            theta += deltaSpeed;
+        else if (action == 3)
+            height = -deltaSpeed * speedNorm;
+        else if (action == 4)
+            height = deltaSpeed * speedNorm;
+
+        Vector3 d = new Vector3(Mathf.Cos(theta), 0, Mathf.Sin(theta));
+        transform.LookAt(transform.position+d);
+        d = new Vector3(0, height, 0);
+        transform.position += d;
+
+        // transform.position += 0.5f * direction / speedNorm;
+
+        if (action == Action)
+            rewardCollision += 1;
+
+        newModel.transform.position = transform.position;
+        newModel.transform.rotation = transform.rotation;
+
+        get_occupancy_map();
+
+        int flag = 1;
+
+        for (int i = 0; i < Maxdetectors * Maxdetectors; ++i)
+            if (occupancy_map[i] * detect_dist < 0.1f) {
+            //   rewardCollision -= 10f;
+              flag = 0;
+            //   Debug.Log("Crash");
+              break;
+            }
+        
+        if ((transform.position-target).magnitude < 0.5f) {
+            target = random_position();
+            distance = (target-transform.position).magnitude / max_distance;
+            rewardCollision += 10; //Vector3.Dot(direction, Vector3.Normalize(target-transform.position));
+            Debug.Log("arrive");
+        }
+        SetReward(rewardCollision);
+        change_line(L, transform.position, target);
+
+        if (flag == 0)
+            EndEpisode();
+    }
+
+/*
     public override async void OnActionReceived(ActionBuffers actionBuffers)
     {
         recordedStep+=1;
@@ -224,9 +289,10 @@ public class navigate_3D : Agent
         SetReward(rewardCollision);
         change_line(L, transform.position, target);
 
-        // if (flag == 0)
-        //     EndEpisode();
+        if (flag == 0)
+            EndEpisode();
     }
+*/
 
     private void get_occupancy_map() {
         occupancy_map = new float[Maxdetectors * Maxdetectors];
@@ -282,6 +348,8 @@ public class navigate_3D : Agent
 
     private void initializeScene()
     {
+        Action = Random.Range(0, 5);
+
         Random.InitState((int)System.DateTime.Now.Ticks);
         index = 0;
 

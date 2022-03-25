@@ -31,8 +31,9 @@ class StateInterpreter:
     def CamPos3_ObsPos3(mVersion, state):
       """ State interpreter: Camera Position and Cube Position in 3D
       """
-      cam   = state[0][:,  :4]      # position + velocity 3 dim
-      obs   = state[0][:, 4: ]      # obs 3 dim
+      cam   = state[0][:,  :3]      # position + velocity 3 dim
+      obs   = state[0][:, 3: ]      # obs 3 dim
+
       return obs, cam
       
     @staticmethod

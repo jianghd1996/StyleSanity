@@ -2,7 +2,7 @@ defaults:
   - _self_
   - model: dqn.yaml
   - env: sanity_env_2d
-  - compnode: cuda
+  - compnode: cpu_128
 
 # Type of run to launch (current: train, TODO: debug/eval/infer/...)
 # run_type: infer

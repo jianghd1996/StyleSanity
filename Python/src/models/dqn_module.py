@@ -10,7 +10,7 @@ from torch import nn
 from torch.optim import Adam, Optimizer
 from torch.utils.data import DataLoader
 
-from src.models.modules.DQN import Discriminator
+from src.models.modules.DQN import Discriminator, OptClass
 from src.models.memory import ReplayBuffer, RLDataset
 from src.models.agent import Agent
 import src.utils.utils as utils
@@ -70,14 +70,17 @@ class DQNModule(LightningModule):
 
         self.env = env
 
-        self.net = \
-          vc.current_model(n_actions)
-        self.target_net = \
-          vc.current_model(n_actions)
+        # self.net = \
+        #   vc.current_model(n_actions)
+        # self.target_net = \
+        #   vc.current_model(n_actions)
+
+        self.net = OptClass(5)
 
         self.D = Discriminator(4)
 
         self.criterion = nn.MSELoss()
+        self.cri_cate = nn.CrossEntropyLoss()
 
         self._lr = lr
         self._lr_reduce_rate = lr_reduce_rate
@@ -142,6 +145,17 @@ class DQNModule(LightningModule):
         output = self.net(obstacle_state, camera_state)
         return output
 
+    def cate_loss(self, batch: BatchTuple) -> torch.Tensor:
+        states, actions, rewards, dones, next_states = batch
+
+        opt = states[1]
+
+        out = self.net(opt)
+
+        loss = self.cri_cate(out, actions)
+
+        return loss
+
     def dqn_mse_loss(self, batch: BatchTuple) -> torch.Tensor:
         """Calculates the mse loss using a mini batch from the replay buffer.
 
@@ -164,8 +178,9 @@ class DQNModule(LightningModule):
             next_state_values[dones] = 0.0
             next_state_values = next_state_values.detach()
 
+            n_opt = next_states[1]
             expected_state_action_values = (
-                next_state_values * self._gamma + rewards + self.D(cam, next_cam).squeeze(1)
+                next_state_values * self._gamma + rewards + self.D(opt, n_opt).squeeze(1)
             )
 
         loss = self.criterion(
@@ -179,11 +194,8 @@ class DQNModule(LightningModule):
         r_states, r_actions, r_rewards, r_dones, r_next_states = r_batch
 
         # state = list [(bs x 1 x 132), (bs x 720 x 480 x 3), (bs x 720 x 480 x 3)]
-        obs, cam = vc.current_interpreter(states)
-        next_obs, next_cam = vc.current_interpreter(next_states)
-
-        obs, r_cam = vc.current_interpreter(r_states)
-        next_obs, r_next_cam = vc.current_interpreter(r_next_states)
+        opt, n_opt = states[1], next_states[1]
+        r_opt, r_n_opt = r_states[1], r_next_states[1]
 
         device = self.get_device(batch)
         
@@ -192,13 +204,13 @@ class DQNModule(LightningModule):
         valid = torch.ones(len(r_states[0]), 1).to(device)
         fake = torch.zeros(len(states[0]), 1).to(device)
 
-        D_loss = 0.5 * (self.criterion(self.D(cam, next_cam), fake).mean()
-                        +self.criterion(self.D(r_cam, r_next_cam), valid).mean())
+        D_loss = 0.5 * (self.criterion(self.D(opt, n_opt), fake).mean()
+                        +self.criterion(self.D(r_opt, r_n_opt), valid).mean())
 
         return D_loss
 
 
-    def training_step(self, batch: BatchTuple, nb_batch: int, optimizer_idx : int) -> OrderedDict:
+    def training_step(self, batch: BatchTuple, nb_batch: int) -> OrderedDict:
         """
         Carries out a single step through the environment to update the replay
         buffer. Then calculates loss based on the minibatch recieved.
@@ -209,109 +221,126 @@ class DQNModule(LightningModule):
         """
         batch, r_batch = batch
 
-        device = self.get_device(batch)
+        device = self.get_device(batch[0])
 
-        if optimizer_idx == 0:
-            epsilon = 0.1
-            # Step through environment with agent
-            reward, done, _state = self.agent.play_step(self.net, epsilon, device)
-            self.cumreward += reward
+        reward, done, _state = self.agent.play_step(self.net, 1.0, device)
 
-            # Calculates training loss
-            loss, q_value = self.dqn_mse_loss(batch)
-            if self._distrib_type in {
-                DistributedType.DP,
-                DistributedType.DDP2,
-            }:
-                loss = loss.unsqueeze(0)
-                q_value = q_value.unsqueeze(0)
+        if done:
+            self.agent.reset()
 
-            self.episode_losses.append(loss.detach())
-            self.episode_q_values.append(q_value.detach())
+        loss = self.cate_loss(batch).unsqueeze(0)
 
-            # Soft update of target network
-            if self.global_step % self._sync_rate == 0:
-                self.target_net.load_state_dict(self.net.state_dict())
+        self.step_index += 1
 
-            if self.step_index == self.episode_length:
-                done = True
+        logs = {
+            "step/loss": loss.detach(),
+        }
 
-            self.step_index += 1
+        outputs = OrderedDict({"loss": loss, "logs": logs})
+        return outputs
 
-            logs = {
-                "step/reward": reward,
-                "step/loss": self.episode_losses[-1],
-                "step/q_value": self.episode_q_values[-1],
-            }
+        device = self.get_device(batch[0])
 
-            if done:
-                self.episode_success.append(int(self.step_index == self.episode_length))
-                logs.update({
-                    "episode/cumreward": torch.tensor(self.cumreward).to(device),
-                    "episode/loss": torch.tensor(self.episode_losses).to(device),
-                    "episode/D_loss": torch.tensor(self.episode_D_losses).to(device),
-                    "episode/q_value": torch.tensor(self.episode_q_values).to(device),
-                    "episode": torch.tensor(self.episode_index).to(device),
-                    "episode/episode_success": self.episode_success[-1],
-                    "episode/epsilon": epsilon,
-                    "episode/steps": self.step_index,
-                    "episode/end_reward": reward})
-                self.cumreward = 0
-                self.step_index = 0
-                self.episode_D_losses = []
-                self.episode_losses = []
-                self.episode_index += 1
-                self.agent.reset()
+        epsilon = 0.1
+        # Step through environment with agent
+        reward, done, _state = self.agent.play_step(self.net, epsilon, device)
+        self.cumreward += reward
 
-                for i in tqdm(range(50)):
-                    reward, done, _state = self.agent.play_step(gt=True)
+        # Calculates training loss
+        loss, q_value = self.dqn_mse_loss(batch)
+        if self._distrib_type in {
+            DistributedType.DP,
+            DistributedType.DDP2,
+        }:
+            loss = loss.unsqueeze(0)
+            q_value = q_value.unsqueeze(0)
 
-                    if done:
-                        self.agent.reset()
+        self.episode_losses.append(loss.detach())
+        self.episode_q_values.append(q_value.detach())
 
-            outputs = OrderedDict({"loss": loss, "logs": logs})
-            return outputs
+        # Soft update of target network
+        if self.global_step % self._sync_rate == 0:
+            self.target_net.load_state_dict(self.net.state_dict())
 
-        else:
-            D_loss = self.D_loss(batch, r_batch).unsqueeze(0)
+        if self.step_index == self.episode_length:
+            done = True
 
-            self.episode_D_losses.append(D_loss.detach())
+        self.step_index += 1
 
-            logs = {
-                "step/D_loss": self.episode_D_losses[-1],
-            }
+        logs = {
+            "step/reward": reward,
+            "step/loss": self.episode_losses[-1],
+            "step/q_value": self.episode_q_values[-1],
+        }
 
-            outputs = OrderedDict({"loss": D_loss, "logs": logs})
-            return outputs
+        if done:
+            self.episode_success.append(int(self.step_index == self.episode_length))
+            logs.update({
+                "episode/cumreward": torch.tensor(self.cumreward).to(device),
+                "episode/loss": torch.tensor(self.episode_losses).to(device),
+                "episode/D_loss": torch.tensor(self.episode_D_losses).to(device),
+                "episode/q_value": torch.tensor(self.episode_q_values).to(device),
+                "episode": torch.tensor(self.episode_index).to(device),
+                "episode/episode_success": self.episode_success[-1],
+                "episode/epsilon": epsilon,
+                "episode/steps": self.step_index,
+                "episode/end_reward": reward})
+            self.cumreward = 0
+            self.step_index = 0
+            self.episode_D_losses = []
+            self.episode_losses = []
+            self.episode_index += 1
+            self.agent.reset()
+
+            for i in tqdm(range(50)):
+                reward, done, _state = self.agent.play_step(gt=True)
+
+                if done:
+                    self.agent.reset()
+
+        outputs = OrderedDict({"loss": loss, "logs": logs})
+        return outputs
+
+        # else:
+        #     D_loss = self.D_loss(batch, r_batch).unsqueeze(0)
+        #
+        #     self.episode_D_losses.append(D_loss.detach())
+        #
+        #     logs = {
+        #         "step/D_loss": self.episode_D_losses[-1],
+        #     }
+        #
+        #     outputs = OrderedDict({"loss": D_loss, "logs": logs})
+        #     return outputs
 
 
     def training_epoch_end(self, outputs):
         """Log step or episode metrics."""
-        # for out in outputs:
-        #     logs = out["logs"]
-        #     for log_name, log_value in logs.items():
-        #         self.log(
-        #             log_name,
-        #             log_value,
-        #             on_step=False,
-        #             on_epoch=True,
-        #             prog_bar=False,
-        #             logger=True,
-        #             sync_dist=True,
-        #         )
         for out in outputs:
-            for log in out:
-                logs = log["logs"]
-                for log_name, log_value in logs.items():
-                    self.log(
-                        log_name,
-                        log_value,
-                        on_step=False,
-                        on_epoch=True,
-                        prog_bar=False,
-                        logger=True,
-                        sync_dist=True,
-                   )
+            logs = out["logs"]
+            for log_name, log_value in logs.items():
+                self.log(
+                    log_name,
+                    log_value,
+                    on_step=False,
+                    on_epoch=True,
+                    prog_bar=False,
+                    logger=True,
+                    sync_dist=True,
+                )
+        # for out in outputs:
+        #     for log in out:
+        #         logs = log["logs"]
+        #         for log_name, log_value in logs.items():
+        #             self.log(
+        #                 log_name,
+        #                 log_value,
+        #                 on_step=False,
+        #                 on_epoch=True,
+        #                 prog_bar=False,
+        #                 logger=True,
+        #                 sync_dist=True,
+        #            )
 
     def test_step(self, batch: BatchTuple, nb_batch: int):
         """Infer the model."""
@@ -327,7 +356,7 @@ class DQNModule(LightningModule):
 
         if self.step_index == self.episode_length:
             done = True
-            
+
         if done:
             self.episode_success.append(int(self.step_index == self.episode_length))
             print(
@@ -367,19 +396,20 @@ class DQNModule(LightningModule):
             weight_decay=self._weight_decay,
             amsgrad=False,
         )
-        optimizer_D = Adam(
-            self.D.parameters(),
-            lr=self._lr,
-            betas=(0.9, 0.999),
-            eps=1e-8,
-            weight_decay=self._weight_decay,
-            amsgrad=False,
-        )
+        # optimizer_D = Adam(
+        #     self.D.parameters(),
+        #     lr=self._lr,
+        #     betas=(0.9, 0.999),
+        #     eps=1e-8,
+        #     weight_decay=self._weight_decay,
+        #     amsgrad=False,
+        # )
         scheduler = {"scheduler" : torch.optim.lr_scheduler.ExponentialLR(
             optimizer, gamma=self._lr_reduce_rate)}
-        scheduler_D = {"scheduler" : torch.optim.lr_scheduler.ExponentialLR(
-            optimizer_D, gamma=self._lr_reduce_rate)}
-        return [optimizer, optimizer_D], [scheduler, scheduler_D]
+        # scheduler_D = {"scheduler" : torch.optim.lr_scheduler.ExponentialLR(
+        #     optimizer_D, gamma=self._lr_reduce_rate)}
+        # return [optimizer, optimizer_D], [scheduler, scheduler_D]
+        return [optimizer], [scheduler]
 
     def __dataloader(self, buffer) -> DataLoader:
         """

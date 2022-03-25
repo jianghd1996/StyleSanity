@@ -54,6 +54,7 @@ class Agent:
         self.obs={}
         self.numAgent=-1
         self.reset()
+        self.step = 0
         
     def allDone(self):
         for agentId in self.obs:
@@ -103,17 +104,6 @@ class Agent:
             new_state, reward, agentID = d_step.obs, d_step.reward, d_step.agent_id
             self._obs[agentID] = ObsData(new_state, reward, False)
 
-            # from matplotlib import pyplot as plt
-            # plt.ion()
-            # fig = plt.figure()
-            # ax1 = fig.add_subplot(2,1,1)
-            # ax1.imshow(d_step.obs[1])
-            # ax2 = fig.add_subplot(2,1,2)
-            # ax2.imshow(d_step.obs[2])
-            # plt.show()            
-            # plt.pause(0.01)
-            # plt.close('all')
-            
             # import ipdb
             # ipdb.set_trace()
             
@@ -200,20 +190,25 @@ class Agent:
             # self._obs[agentId].print()
             obsdata = self._obs[agentId]
 
-            reward = obsdata.reward
+            self.step += 1
+            from matplotlib import pyplot as plt
+            plt.ion()
+            fig = plt.figure()
+            plt.title(str(actions[agentId][0]))
+            ax1 = fig.add_subplot(2, 1, 1)
+            ax1.imshow(self.obs[agentId].state[1])
+            ax2 = fig.add_subplot(2, 1, 2)
+            ax2.imshow(self.obs[agentId].state[2])
+            # plt.savefig("{}_{}.png".format(actions[agentId][0], self.step))
+            plt.pause(1)
+            plt.close('all')
 
-            if reward < 5:
-                reward = 0
-            else:
-                reward = 10
-
-            exp = Experience(self.obs[agentId].state, actions[agentId][0], reward, obsdata.done, obsdata.state)
-            # exp = Experience(self.obs[agentId].state, actions[agentId][0], obsdata.reward, obsdata.done, obsdata.state)
+            # exp = Experience(self.obs[agentId].state, actions[agentId][0], reward, obsdata.done, obsdata.state)
+            exp = Experience(self.obs[agentId].state, actions[agentId][0], obsdata.reward, obsdata.done, obsdata.state)
             if gt == False:
                 self.replay_buffer.append(exp)
             else:
-                if obsdata.reward > 0.49:
-                    self.gt_buffer.append(exp)
+                self.gt_buffer.append(exp)
           # else:
           #   import ipdb
           #   ipdb.set_trace()
