@@ -17,6 +17,7 @@ outputs/
 /buildLin
 Python/buildMac
 *.meta
+*.zip
 Python/builts/
 
 
