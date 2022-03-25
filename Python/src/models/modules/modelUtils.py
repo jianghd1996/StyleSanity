@@ -31,16 +31,17 @@ class StateInterpreter:
     def CamPos3_ObsPos3(mVersion, state):
       """ State interpreter: Camera Position and Cube Position in 3D
       """
-      cam   = state[0][:,  :4]      # position + velocity 3 dim
-      obs   = state[0][:, 4: ]      # obs 3 dim
+      cam   = state[0][:,  :3]      # position + velocity 3 dim
+      obs   = state[0][:, 3: ]      # obs 3 dim
+
       return obs, cam
       
     @staticmethod
     def CamPos3_ObsOG(mVersion, state):
       """ State interpreter: Camera Position and Cube Position in 3D
       """
-      import ipdb
-      ipdb.set_trace()
+      # import ipdb
+      # ipdb.set_trace()
       
       cam   = state[0][:,  :4]      # distance + local_point 3 dim
       dims  = state[0][:, 4:7]      # dimension of occupancy grid R^3
