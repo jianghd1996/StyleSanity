@@ -174,7 +174,7 @@ class Agent:
         for agentId in range(self.numAgent):
           action = self.get_action(agentId, net, epsilon, device, gt)
           actions.append(np.array([action]))
-        
+
         self.update_state(np.array(actions))
         self.get_obs()
         
@@ -199,8 +199,8 @@ class Agent:
             ax1.imshow(self.obs[agentId].state[1])
             ax2 = fig.add_subplot(2, 1, 2)
             ax2.imshow(self.obs[agentId].state[2])
-            # plt.savefig("{}_{}.png".format(actions[agentId][0], self.step))
-            plt.pause(1)
+            plt.savefig("{}_{}.png".format(self.step, actions[agentId][0]))
+            # plt.pause(0.01)
             plt.close('all')
 
             # exp = Experience(self.obs[agentId].state, actions[agentId][0], reward, obsdata.done, obsdata.state)

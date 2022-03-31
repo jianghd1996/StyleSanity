@@ -64,8 +64,19 @@ public class ImageSynthesis : MonoBehaviour {
 	// ComputeBuffer outMotionBuffer;
 	// Vector2[] motionArray;
 
+	private Camera myCamera;
+    private RenderTexture renderTexture;
+    private Texture2D screenShot;
+    public int screenshotIndex;
+	public string SaveDirectory = "d:\\Screenshot";
+
 	void Start()
 	{
+		myCamera = gameObject.GetComponent<Camera>();
+        renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
+        Debug.LogFormat("{0} {1}", Screen.width, Screen.height);
+        screenShot = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+
 		// default fallbacks, if shaders are unspecified
 		if (!uberReplacementShader)
 			uberReplacementShader = Shader.Find("Hidden/UberReplacement");
@@ -94,9 +105,16 @@ public class ImageSynthesis : MonoBehaviour {
 		OnSceneChange();
 	}
 
-	int imageCounter = 0;
-	void LateUpdate()
+	int imageCounter = 0, image = 0;
+	void FixedUpdate()
 	{
+		
+		Debug.LogFormat("action {0}", navigate_3D.step);
+		// if (image >= navigate_3D.step)
+		// 	return;
+		image += 1;
+		Debug.LogFormat("image {0}", image);
+
 		#if UNITY_EDITOR
 		if (DetectPotentialSceneChangeInEditor())
 			OnSceneChange();
@@ -246,6 +264,30 @@ public class ImageSynthesis : MonoBehaviour {
     }
 
 	}
+
+	void Render()
+    {
+        if (!Directory.Exists(SaveDirectory))
+        {
+            Directory.CreateDirectory(SaveDirectory);
+        }
+        myCamera.targetTexture = renderTexture;
+        myCamera.Render();
+        RenderTexture.active = renderTexture;
+        screenShot.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
+        myCamera.targetTexture = null;
+        RenderTexture.active = null; // JC: added to avoid errors
+        byte[] bytes = screenShot.EncodeToJPG();
+
+        screenshotIndex += 1;
+
+        string filename = string.Format("{0}\\{1:00000}.jpg",
+            SaveDirectory,
+            screenshotIndex
+            );
+
+        File.WriteAllBytes(filename, bytes);
+    }
 
 	private void Save(Camera cam, string filename, int width, int height, bool supportsAntialiasing, bool needsRescale, CamModes mode)
 	{

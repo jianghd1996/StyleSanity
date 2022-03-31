@@ -5,7 +5,7 @@ def test():
     from src.utils.utils import testViz
     testViz()
 
-@hydra.main(config_path="configs/", config_name="config_og.yaml")
+@hydra.main(config_path="configs/", config_name="config.yaml")
 def main(config: DictConfig):
     from src.infer import infer
     from src.train import train

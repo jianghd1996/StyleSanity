@@ -155,8 +155,12 @@ public class navigate_3D : Agent
         // sensor.AddObservation(outArray);
     }
 
+    public static int step = 0;
     public override async void OnActionReceived(ActionBuffers actionBuffers)
     {
+        step += 1;
+        // Debug.LogFormat("action {0}", step);
+
         recordedStep+=1;
 
         // Update camera angle according to the received action
@@ -169,7 +173,6 @@ public class navigate_3D : Agent
         if (action == 5)
             action = Action;
 
-        action = Random.Range(0, 5);
         if (action == 0)
             theta -= deltaSpeed;
         else if (action == 1)
